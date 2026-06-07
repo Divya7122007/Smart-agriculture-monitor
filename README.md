@@ -24,3 +24,5 @@ In conclusion, the Smart Agriculture Monitoring System provides a practical and 
 
 OUTPUT: 
 
+<img width="1408" height="768" alt="Image" src="https://github.com/user-attachments/assets/dc863e28-7bb1-4051-98a8-258bc59fd436" />
+
