@@ -1,0 +1,88 @@
+Arduino Source Code
+
+#define BLYNK_TEMPLATE_ID   "YOUR_TEMPLATE_ID"
+#define BLYNK_TEMPLATE_NAME "Smart Agriculture"
+#define BLYNK_AUTH_TOKEN    "YOUR_AUTH_TOKEN" // Check your email or Blynk dashboard
+
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h> // Library for ESP8266 Wi-Fi
+#include <BlynkSimpleEsp8266.h>
+#include <DHT.h>
+
+// Hardware Pin Definitions
+#define DHTPIN D4          // DHT11 Data pin connected to D4
+#define DHTTYPE DHT11      // Specifying the sensor type
+#define SOIL_PIN A0        // Soil moisture sensor connected to Analog pin A0
+#define RELAY_PIN D1       // Relay module controlling the water pump connected to D1
+
+// Network Credentials
+char ssid[] = "YOUR_WIFI_SSID";     // Your Wi-Fi network name
+char pass[] = "YOUR_WIFI_PASSWORD"; // Your Wi-Fi password
+
+// Threshold configuration
+const int dryThreshold = 40; // Motor turns ON if soil moisture drops below 40%
+
+DHT dht(DHTPIN, dhtType);
+BlynkTimer timer;
+
+// Function to read sensors and send data to Blynk
+void sendSensorData() {
+  // Read humidity and temperature
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature(); // Temperature in Celsius
+
+  // Read analog soil moisture value
+  int rawMoisture = analogRead(SOIL_PIN); //
+  
+  // Map the raw sensor data (0 - 1023) into a readable 0% - 100% moisture percentage
+  // Note: Most soil sensors output low voltage when wet, high when dry. Adjust mapping if inverted.
+  int moisturePercentage = map(rawMoisture, 1023, 0, 0, 100);
+  moisturePercentage = constrain(moisturePercentage, 0, 100);
+
+  // Error safety check for DHT sensor
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read data from DHT sensor!"); //
+    return;
+  }
+
+  // Automate water pump relay based on soil moisture percentage
+  if (moisturePercentage < dryThreshold) {
+    digitalWrite(RELAY_PIN, LOW); // Turn ON relay (Active Low Module)
+    Blynk.virtualWrite(V4, 1);    // Update Pump Status Widget to ON
+    Serial.println("Soil is DRY. Water pump activated.");
+  } else {
+    digitalWrite(RELAY_PIN, HIGH); // Turn OFF relay
+    Blynk.virtualWrite(V4, 0);     // Update Pump Status Widget to OFF
+    Serial.println("Soil is WET. Water pump deactivated.");
+  }
+
+  // Stream data to the serial monitor for local debugging
+  Serial.print("Temp: "); Serial.print(temperature); Serial.print("C | ");
+  Serial.print("Humidity: "); Serial.print(humidity); Serial.print("% | ");
+  Serial.print("Soil Moisture: "); Serial.print(moisturePercentage); Serial.println("%");
+
+  // Push real-time data stream to Blynk Virtual Pins
+  Blynk.virtualWrite(V1, temperature);        // Assign V1 to a Temperature Gauge
+  Blynk.virtualWrite(V2, humidity);           // Assign V2 to a Humidity Gauge
+  Blynk.virtualWrite(V3, moisturePercentage); // Assign V3 to a Soil Moisture Gauge
+}
+
+void setup() {
+  Serial.begin(9600); // Initialize serial tracking at 9600 baud rate
+  
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH); // Keep relay off by default on system boot up
+
+  dht.begin();
+  
+  // Initialize Blynk connection and sync with your local network
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  // Set the sensor reading interval to every 3000ms (3 seconds) to protect DHT11 lifespans
+  timer.setInterval(3000L, sendSensorData);
+}
+
+void loop() {
+  Blynk.run();       // Runs internal Blynk cloud communication processes
+  timer.run();       // Triggers the timed loop function execution
+}
